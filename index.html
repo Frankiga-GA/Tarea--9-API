@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Exámenes - Aprende Perú</title>
+  <style>
+    body { font-family: Arial; padding: 20px; }
+    .pregunta { margin-bottom: 20px; }
+    button { margin-top: 10px; }
+  </style>
+</head>
+<style>
+  .resultado {
+    margin-top: 20px;
+    padding: 15px;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+  }
+  .aprobado {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+  }
+  .desaprobado {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+  }
+</style>
+<body>
+  <h1>Exámenes Asignados</h1>
+  <select id="alumnoSelect">
+    <option value="2">Carlos (ID 2)</option>
+    <option value="3">María (ID 3)</option>
+    <option value="4">Javier (ID 4)</option>
+  </select>
+  <button onclick="cargarExamenes()">Cargar Exámenes</button>
+
+  <div id="examenesContainer"></div>
+
+  <script>
+    async function cargarExamenes() {
+      const id_usuario = document.getElementById("alumnoSelect").value;
+      const res = await fetch(`http://localhost:4000/api/examenes/${id_usuario}`);
+      const data = await res.json();
+      const container = document.getElementById("examenesContainer");
+      container.innerHTML = "";
+
+      data.forEach(examen => {
+        const div = document.createElement("div");
+        div.innerHTML = `
+          <h3>${examen.titulo} (${examen.tipo_area})</h3>
+          <button onclick="iniciarExamen(${examen.id_evaluacion}, ${id_usuario})">Iniciar Examen</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    async function iniciarExamen(id_evaluacion, id_usuario) {
+      const res = await fetch(`http://localhost:4000/api/examenes/preguntas/${id_evaluacion}`);
+      const preguntas = await res.json();
+      mostrarPreguntas(preguntas, id_evaluacion, id_usuario);
+    }
+
+    function mostrarPreguntas(preguntas, id_evaluacion, id_usuario) {
+      const container = document.getElementById("examenesContainer");
+      container.innerHTML = "<h2>Contesta las preguntas:</h2>";
+
+      const form = document.createElement("form");
+      form.id = "formularioRespuestas";
+
+      preguntas.forEach(p => {
+        const div = document.createElement("div");
+        div.className = "pregunta";
+        div.innerHTML = `<strong>${p.texto}</strong><br/>`;
+
+        p.alternativas.forEach(a => {
+          const label = document.createElement("label");
+          label.innerHTML = `
+            <input type="radio" name="pregunta_${p.id_pregunta}" value="${a.id_alternativa}" required>
+            ${a.texto}<br/>
+          `;
+          label.style.display = "block";
+          div.appendChild(label);
+        });
+
+        form.appendChild(div);
+      });
+
+      const btn = document.createElement("button");
+      btn.type = "submit";
+      btn.textContent = "Enviar Respuestas";
+      btn.onclick = (e) => {
+        e.preventDefault();
+        enviarRespuestas(id_usuario, id_evaluacion);
+      };
+
+      form.appendChild(btn);
+      container.appendChild(form);
+    }
+
+    async function enviarRespuestas(id_usuario, id_evaluacion) {
+  const form = document.getElementById("formularioRespuestas");
+  const data = new FormData(form);
+  const respuestas = [];
+
+  for (const [key, value] of data.entries()) {
+    const id_pregunta = parseInt(key.replace("pregunta_", ""));
+    respuestas.push({
+      id_pregunta,
+      id_alternativa_seleccionada: parseInt(value)
+    });
+  }
+
+  const res = await fetch("http://localhost:4000/api/examenes/responder", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      id_usuario,
+      id_evaluacion,
+      respuestas
+    })
+  });
+
+  const resultado = await res.json();
+
+  // Mostrar resultado
+  const puntaje = resultado.puntaje_obtenido;
+  const aprobado = puntaje >= 11 ? "Aprobado" : "Desaprobado";
+  const color = puntaje >= 11 ? "green" : "red";
+
+  const resultadoDiv = document.createElement("div");
+  resultadoDiv.innerHTML = `
+    <h3 style="color:${color}">${aprobado}</h3>
+    <p>Puntaje obtenido: <strong>${puntaje.toFixed(2)}</strong> / 20</p>
+  `;
+  form.appendChild(resultadoDiv);
+}
+  </script>
+</body>
+</html>
